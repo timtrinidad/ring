@@ -40,7 +40,7 @@ interface HandleStreamRequest {
     mtu: number
   }
   audio: {
-    codec: 'AAC-eld' | string
+    codec: 'OPUS' | string
     channel: number
     bit_rate: number
     sample_rate: number
@@ -85,7 +85,7 @@ export class CameraSource {
       audio: {
         codecs: [
           {
-            type: 'AAC-eld',
+            type: 'OPUS',
             samplerate: 16
           }
         ]
@@ -162,7 +162,7 @@ export class CameraSource {
             srtp_salt: videoSrtpSalt
           }
         } = request,
-        [sipSession, libfdkAacInstalled] = await Promise.all([
+        [sipSession] = await Promise.all([
           this.ringCamera.createSipSession({
             audio: {
               srtpKey: audioSrtpKey,
@@ -187,64 +187,10 @@ export class CameraSource {
               return false
             })
         ]),
-        audioSsrc = generateSsrc(),
-        proxyAudioPort = await sipSession.reservePort(),
-        [rtpOptions, videoProxy] = await Promise.all([
-          sipSession.start(
-            libfdkAacInstalled
-              ? {
-                  audio: [
-                    '-map',
-                    '0:0',
-
-                    // OPUS specific - it works, but audio is very choppy
-                    // '-acodec',
-                    // 'libopus',
-                    // '-vbr',
-                    // 'on',
-                    // '-frame_duration',
-                    // 20,
-                    // '-application',
-                    // 'lowdelay',
-
-                    // AAC-eld specific
-                    '-acodec',
-                    'libfdk_aac',
-                    '-profile:a',
-                    'aac_eld',
-
-                    // Shared options
-                    '-flags',
-                    '+global_header',
-                    '-ac',
-                    1,
-                    '-ar',
-                    '16k',
-                    '-b:a',
-                    '24k',
-                    '-bufsize',
-                    '24k',
-                    '-payload_type',
-                    110,
-                    '-ssrc',
-                    audioSsrc,
-                    '-f',
-                    'rtp',
-                    '-srtp_out_suite',
-                    'AES_CM_128_HMAC_SHA1_80',
-                    '-srtp_out_params',
-                    getSrtpValue({
-                      srtpKey: audioSrtpKey,
-                      srtpSalt: audioSrtpSalt
-                    }),
-                    `srtp://${targetAddress}:${audioPort}?localrtcpport=${proxyAudioPort}&pkt_size=188`
-                  ],
-                  video: false,
-                  output: []
-                }
-              : undefined
-          ),
-          bindProxyPorts(videoPort, targetAddress, 'video', sipSession)
+        [rtpOptions, videoProxy, audioProxy] = await Promise.all([
+          sipSession.start(),
+          bindProxyPorts(videoPort, targetAddress, 'video', sipSession),
+          bindProxyPorts(audioPort, targetAddress, 'audio', sipSession)
         ])
 
       this.sessions[hap.UUIDGen.unparse(sessionID)] = sipSession
@@ -254,7 +200,8 @@ export class CameraSource {
           this.ringCamera.name
         } (${getDurationSeconds(start)}s)`
       )
-      const videoSsrc = await videoProxy.ssrcPromise
+      const videoSsrc = await videoProxy.ssrcPromise,
+        audioSsrc = await videoProxy.ssrcPromise
 
       this.logger.info(
         `Received stream data from ${
@@ -269,10 +216,10 @@ export class CameraSource {
           type: ip.isV4Format(currentAddress) ? 'v4' : 'v6'
         },
         audio: {
-          port: proxyAudioPort,
+          port: audioProxy.localPort,
           ssrc: audioSsrc,
-          srtp_key: audioSrtpKey,
-          srtp_salt: audioSrtpSalt
+          srtp_key: rtpOptions.audio.srtpKey,
+          srtp_salt: rtpOptions.audio.srtpSalt
         },
         video: {
           port: videoProxy.localPort,
@@ -292,6 +239,7 @@ export class CameraSource {
   }
 
   handleStreamRequest(request: HandleStreamRequest) {
+    console.log('STREAM REQ', request)
     const sessionID = request.sessionID,
       sessionKey = hap.UUIDGen.unparse(sessionID),
       session = this.sessions[sessionKey],
