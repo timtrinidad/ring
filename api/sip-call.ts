@@ -109,6 +109,8 @@ function parseRtpDescription(inviteResponse: {
     lines: string[] = sdp.splitLines(sections[0]),
     cLine = lines.find((line: string) => line.startsWith('c='))!
 
+  // console.log(inviteResponse.content)
+
   return {
     address: cLine.match(/c=IN IP4 (\S*)/)![1],
     audio: getRtpDescription(sections, 'audio'),
@@ -345,6 +347,9 @@ export class SipCall {
     return parseRtpDescription(inviteResponse)
   }
 
+  /**
+   * Deprecated - no longer used by old or new media servers
+   */
   async requestKeyFrame() {
     // camera connected event doesn't always happen if cam is already streaming.  2 second fallback
     await Promise.race([this.cameraConnectedPromise, delay(2000)])
