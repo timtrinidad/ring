@@ -63,6 +63,7 @@ export function sendStunBindingRequest({
         logError(`${type} stun error`)
         logError(e)
       })
+    rtcpSplitter.send(stun.encode(message), { address, port: rtcpPort })
   } else {
     // ICE not supported.  Fire and forget the stun request for RTP and RTCP
     const encodedMessage = stun.encode(message)

@@ -183,6 +183,8 @@ export class SipCall {
       `m=audio ${audio.port} RTP/SAVPF 0`,
       'a=rtpmap:0 PCMU/8000',
       createCryptoLine(audio),
+      // FIXME does this need to be a consecutive port number!?!?
+      // `a=rtcp:${audio.rtcpPort} IN IP4 ${host}`,
       'a=rtcp-mux',
       'a=rtcp-fb:* trr-int 5',
       'a=rtcp-fb:* ccm tmmbr',
@@ -195,6 +197,7 @@ export class SipCall {
       'a=rtpmap:99 H264/90000',
       'a=fmtp:99 profile-level-id=42801F',
       createCryptoLine(video),
+      // `a=rtcp:${video.rtcpPort} IN IP4 ${host}`,
       'a=rtcp-mux',
       'a=rtcp-fb:* trr-int 5',
       'a=rtcp-fb:* ccm tmmbr',

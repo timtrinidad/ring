@@ -163,6 +163,8 @@ export class SipSession extends Subscribed {
     videoPort: number
   ) {
     const transcodeVideoStream = ffmpegOptions.video !== false,
+      audioRtcpPort = audioPort + 1,
+      videoRtcpPort = videoPort + 1,
       ffmpegArgs = [
         '-hide_banner',
         '-protocol_whitelist',
@@ -199,41 +201,37 @@ export class SipSession extends Subscribed {
         `m=audio ${audioPort} RTP/SAVP 0 101`,
         'a=rtpmap:0 PCMU/8000',
         createCryptoLine(remoteRtpOptions.audio),
-        'a=rtcp-mux',
-      ]
+        `a=rtcp:${audioRtcpPort} IN IP4 127.0.0.1`,
+      ],
+      forwardPacketsToFfmpeg = (rtpSplitter: RtpSplitter, port: number) => {
+        rtpSplitter.addMessageHandler(({ message }) => {
+          if (isStunMessage(message)) {
+            // stun binding requests will cause extra messages which do not need to be passed to ffmpeg
+            return null
+          }
+
+          return { port }
+        })
+      }
 
     if (transcodeVideoStream) {
       inputSdpLines.push(
         `m=video ${videoPort} RTP/SAVP 99`,
         'a=rtpmap:99 H264/90000',
         createCryptoLine(remoteRtpOptions.video),
-        'a=rtcp-mux'
+        `a=rtcp:${videoRtcpPort} IN IP4 127.0.0.1`
       )
 
-      this.videoSplitter.addMessageHandler(({ isRtpMessage, message }) => {
-        if (isStunMessage(message)) {
-          return null
-        }
-
-        return {
-          port: isRtpMessage ? videoPort : videoPort + 1,
-        }
-      })
+      forwardPacketsToFfmpeg(this.videoSplitter, videoPort)
+      forwardPacketsToFfmpeg(this.videoRtcpSplitter, videoRtcpPort)
     }
 
     this.onCallEnded.subscribe(() => ff.stop())
 
     ff.writeStdin(inputSdpLines.filter((x) => Boolean(x)).join('\n'))
 
-    this.audioSplitter.addMessageHandler(({ isRtpMessage, message }) => {
-      if (isStunMessage(message)) {
-        return null
-      }
-
-      return {
-        port: isRtpMessage ? audioPort : audioPort + 1,
-      }
-    })
+    forwardPacketsToFfmpeg(this.audioSplitter, audioPort)
+    forwardPacketsToFfmpeg(this.audioRtcpSplitter, audioRtcpPort)
   }
 
   async reservePort(bufferPorts = 0) {
@@ -242,6 +240,7 @@ export class SipSession extends Subscribed {
   }
 
   requestKeyFrame() {
+    // FIXME: bring back key frame requests
     return this.sipCall.requestKeyFrame()
   }
 
@@ -262,8 +261,10 @@ export class SipSession extends Subscribed {
     // clean up
     this.onCallEndedSubject.next()
     this.sipCall.destroy()
-    this.videoSplitter.close()
     this.audioSplitter.close()
+    this.audioRtcpSplitter.close()
+    this.videoSplitter.close()
+    this.videoRtcpSplitter.close()
     this.unsubscribe()
   }
 

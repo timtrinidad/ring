@@ -297,6 +297,7 @@ export class CameraSource implements CameraStreamingDelegate {
                   'AES_CM_128_HMAC_SHA1_80',
                   '-srtp_out_params',
                   encodeSrtpOptions(sipSession.rtpOptions.audio),
+                  // TODO: forward RTCP to HomeKit as keepalive
                   `srtp://${targetAddress}:${audioPort}?localrtcpport=${incomingAudioRtcpPort}&pkt_size=188`,
                 ],
                 video: false,
@@ -314,6 +315,11 @@ export class CameraSource implements CameraStreamingDelegate {
 
             if (!isRtpMessage) {
               // Only need to handle RTCP packets.  We really shouldn't receive RTP, but check just in case
+
+              console.log('RECEIVED RTCP', {
+                port: info.port,
+                address: info.address,
+              })
               sipSession.videoRtcpSplitter.send(message, {
                 port: ringRtpDescription.video.rtcpPort,
                 address: ringRtpDescription.address,
@@ -348,13 +354,15 @@ export class CameraSource implements CameraStreamingDelegate {
       sipSession.videoRtcpSplitter.addMessageHandler(
         ({ message, info, isRtpMessage }) => {
           // for ICE connections, Rtcp splitter is the same as Rtp splitter, so we need to filter other messages out
-          if (
-            isStunMessage(message) ||
-            isRtpMessage ||
-            info.address === targetAddress
-          ) {
+          if (isStunMessage(message) || isRtpMessage) {
             return null
           }
+
+          if (info.address === targetAddress) {
+            console.log('FROM HOMEKIT RTCP', info.address, info.port)
+            return null
+          }
+          console.log('FROM RING RTCP', info.address, info.port)
 
           sipSession.videoSplitter.send(message, {
             port: videoPort,
@@ -363,6 +371,21 @@ export class CameraSource implements CameraStreamingDelegate {
           return null
         }
       )
+
+      // sipSession.videoRtcpSplitter.addMessageHandler(({ message, info }) => {
+      //   if (info.address === targetAddress) {
+      //     console.log('FROM HOMEKIT RTCP', info.address, info.port)
+      //     return null
+      //   }
+      //
+      //   console.log('FROM RING RTCP', info.address, info.port)
+      //
+      //   sipSession.videoSplitter.send(message, {
+      //     port: videoPort,
+      //     address: targetAddress,
+      //   })
+      //   return null
+      // })
 
       let returnAudioPort: number | null = null
       if (libfdkAacInstalled) {
@@ -376,6 +399,7 @@ export class CameraSource implements CameraStreamingDelegate {
               cameraSpeakerActived = true
               void sipSession.activateCameraSpeaker()
             }
+            // FIXME: Dogs is broken now too now that we split rtp/rtcpslack
 
             sipSession.audioSplitter.send(
               description.message,
@@ -488,8 +512,11 @@ export class CameraSource implements CameraStreamingDelegate {
       logInfo(`Streaming active for ${this.ringCamera.name}`)
     } else if (requestType === 'stop') {
       logInfo(`Stopped Live Stream for ${this.ringCamera.name}`)
-      session.stop()
-      delete this.sessions[sessionKey]
+      setTimeout(() => {
+        console.log('full stop')
+        session.stop()
+        delete this.sessions[sessionKey]
+      }, 10000)
     }
 
     callback()
