@@ -35,7 +35,6 @@ import {
   StreamingConnectionOptions,
   WebrtcConnection,
 } from './streaming/webrtc-connection'
-import { FfmpegOptions, StreamingSession } from './streaming/streaming-session'
 import { SimpleWebRtcSession } from './streaming/simple-webrtc-session'
 
 export type AnyCameraData = CameraData | OnvifCameraData
@@ -396,11 +395,6 @@ export class RingCamera extends Subscribed {
     return new WebrtcConnection(response.ticket, this, options)
   }
 
-  async startLiveCall(options: StreamingConnectionOptions = {}) {
-    const connection = await this.createStreamingConnection(options)
-    return new StreamingSession(this, connection)
-  }
-
   private removeDingById(idToRemove: string) {
     const allActiveDings = this.activeNotifications,
       otherDings = allActiveDings.filter(({ ding }) => ding.id !== idToRemove)
@@ -610,20 +604,6 @@ export class RingCamera extends Subscribed {
         accept: 'image/jpeg',
       },
     })
-  }
-
-  async recordToFile(outputPath: string, duration = 30) {
-    const liveCall = await this.streamVideo({
-      output: ['-t', duration.toString(), outputPath],
-    })
-
-    await firstValueFrom(liveCall.onCallEnded)
-  }
-
-  async streamVideo(ffmpegOptions: FfmpegOptions) {
-    const liveCall = await this.startLiveCall()
-    await liveCall.startTranscoding(ffmpegOptions)
-    return liveCall
   }
 
   /**

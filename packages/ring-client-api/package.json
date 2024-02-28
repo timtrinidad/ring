@@ -14,7 +14,8 @@
     "dev": "tsc --declaration --watch --preserveWatchOutput",
     "lint": "eslint . --ext .ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "postinstall": "./node_modules/.bin/tsc --declaration"
   },
   "dependencies": {
     "@eneris/push-receiver": "^3.1.5",
@@ -34,7 +35,8 @@
     "uuid": "^9.0.1",
     "webcrypto-core": "^1.7.7",
     "werift": "0.18.17",
-    "ws": "^8.15.1"
+    "ws": "^8.15.1",
+    "typescript": "5.2.2"
   },
   "devDependencies": {
     "@types/debug": "4.1.12",
@@ -46,8 +48,7 @@
     "eslint-config-shared": "*",
     "jest": "29.7.0",
     "ts-jest": "29.1.1",
-    "tsconfig": "*",
-    "typescript": "5.2.2"
+    "tsconfig": "*"
   },
   "engines": {
     "node": "^18 || ^20"
